@@ -170,4 +170,27 @@ To convert the `client.py` script into a standalone executable file using PyInst
     ![output](img/setup.png)
 
 5. **Modes**:
-    - Under the Modes tab,
+    - Under the Modes tab, check the following:
+      - "Unpack to temporary folder"
+      - "Hide all"
+
+    ![output](img/modes.png)
+
+6. **Icon**:
+    - Under the Icon tab, load the SFX icon from your desktop (the .ico file you converted from the PNG).
+
+    ![output](img/icon.png)
+
+7. **Update**:
+    - Under the Update tab, check "Extract and update files" and select "Overwrite all files".
+
+    ![output](img/update.png)
+
+After entering the above parameters, click ‘OK’ and the archive called `background.png.exe` will pop up on the Desktop with the correct background icon. Double-clicking on `background.png.exe` will execute the malicious executable and also open a png file  like normal. Nothing else is needed to bypass Defender when executing our executable with another non-malicious executable, so the job is done.(you can do that with `chrome.exe` for example )
+
+## DedSeC.exe Team
+
+You can learn more about our team and its members by visiting our LinkedIn pages:
+- [Anouar Boukabous](https://ma.linkedin.com/in/anouar-boukabous-72276a246)  
+- [Zakaria Ouahi](https://www.linkedin.com/in/zakaria/)  
+- [Mohamed amine oubella](https://ma.linkedin.com/in/mohamed-amine-oubella-5a9782234)
