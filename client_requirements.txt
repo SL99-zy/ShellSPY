@@ -1,0 +1,11 @@
+pyaudio==0.2.14
+pynput==0.3.2
+Pillow==10.2.0
+comtypes==1.4.1
+pycaw==2024.02.10
+getmac==0.9.4
+pycryptodome==3.11.0
+pyttsx3==2.90
+opencv-python==4.9.0.80
+pyautogui==0.9.54
+numpy==1.26.4
